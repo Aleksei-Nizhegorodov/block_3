@@ -4,7 +4,7 @@ from matplotlib.animation import FuncAnimation
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, TextBox
 
-rawData = pd.read_csv('1.2.csv', encoding='windows-1251')
+rawData = pd.read_csv('block_3.csv', encoding='windows-1251')
 parametersNames = rawData.columns.tolist()[2:]
 [timeLabel, coordLabel] = rawData.columns.tolist()[:2]
 plotsCount = len(parametersNames)

@@ -13,69 +13,87 @@
 
 #include <gtest/gtest.h>  
 
+/// @brief Подключение пространств имен
 using namespace std;
 using namespace pde_solvers;
 
-
+/// @brief Данные о трубопроводе
 struct pipe {
-    double L;
-    double d_vnesh;
-    double b;
-    double sher;
-    double z_0;
-    double z_l;
-    double n;
-    double density;
-    double nu;
-    double p_0;
-    double v;
-    double Q;
-    double resistance;
+    double L;           //длина, [м]
+    double d_vnesh;     //внешний диаметр, [мм]
+    double b;           //толщина стенки, [мм]
+    double sher;        //абсюлютная шероховатость, [м]
+    double z_0;         //высотная отметка в начале трубопровода, [м]
+    double z_l;         //высотная отметка в конце трубопровода, [м]
+    double n;           //кол-во точек расчетной сетки
+    double density;     //плотность, [кг/м^3]
+    double nu;          //кинематическая вязкость, [сСт]
+    double p_0;         //давление в начале трубопровода, [МПа]
+    double v;           //скорость течения жидкости, [м/с]
+    double Q;           //объемный расход, [м^3/с]
+    double resistance;  //коэфф.гидр.сопротивления
+    double t_w;         //касательное напряжение трения
 
+    //Внутренний диаметр трубопровода
     double get_inner_diameter() const {
         return d_vnesh - 2 * b;
     }
+
+    //Относительная шероховатость
     double get_relative_roughness() const {
         return sher / get_inner_diameter();
     }
 
+    //
     double get_inner_area() const {
         double D = get_inner_diameter();
         double S = M_PI * D * D / 4;
         return v * S;
     }
 
+    //Скорость жидкости
     double get_v() const {
         double D = get_inner_diameter();
         return 4 * Q / (3.1415 * pow(D, 2));
     }
 
+    //Число Рейнольдса
     double get_Re() const {
         double D = get_inner_diameter();
         return get_v() * D / nu;
     }
 
+    //Касательное напряжение трения
     double get_t_w() const {
         return resistance / 8 * density * pow(get_v(), 2);
     }
+
 
     double get_dx() const {
         return L / n;
     }
 
+
     double get_dt() const {
         return get_dx() / v;
     }
+
 
     double get_n() const {
         return (L / v) / get_dt();
     }
 };
 
+/// @brief Массив данных
 struct massiv {
     vector<double> massiv;
 };
 
+/// @brief Фун-ия расчета методом характеристик
+/// @param myPipe ссылка на данные о трубопроводе
+/// @param parametr 
+/// @param current_layer текущий слой
+/// @param previous_layer предыдущий слой
 void characteristic_method(pipe myPipe, double parametr, vector<double>& current_layer, vector<double>& previous_layer) {
     current_layer[0] = parametr;
     for (size_t j = 1; j < myPipe.n; j++) {
@@ -85,6 +103,11 @@ void characteristic_method(pipe myPipe, double parametr, vector<double>& current
     }
 }
 
+/// @brief Фун-ия вывода данных расчета в excel формат
+/// @param myPipe ссылка на данные о трубопроводе
+/// @param buffer 
+/// @param i 
+/// @param time 
 void out_put(pipe myPipe, ring_buffer_t<vector<vector<double>>>& buffer, int i, massiv time) {
     vector<vector<double>>& current_layer = buffer.current();
 
@@ -132,7 +155,7 @@ int main() {
     myPipe.z_0 = 100;
     myPipe.z_l = 50;
     myPipe.v = 0.5;
-    myPipe.n = 10;
+    myPipe.n = 100;
     myPipe.sher = 15e-6;
 
     massiv ro;
