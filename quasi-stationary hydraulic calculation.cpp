@@ -89,18 +89,16 @@ struct massiv {
     vector<double> massiv;
 };
 
-/// @brief Фун-ия расчета методом характеристик
-/// @param myPipe ссылка на данные о трубопроводе
-/// @param parametr 
-/// @param current_layer текущий слой
-/// @param previous_layer предыдущий слой
-void characteristic_method(pipe myPipe, double parametr, vector<double>& current_layer, vector<double>& previous_layer) {
-    current_layer[0] = parametr;
-    for (size_t j = 1; j < myPipe.n; j++) {
-        for (size_t i = 1; i < myPipe.n; i++) {
-            current_layer[i] = previous_layer[i - 1];
-        }
-    }
+/// @brief отдельная функция для метода характеристик
+/// @param iniPipe объявление переменной iniPipe (Данные о параметрах трубопровода)
+/// @param argument  нач.значения
+/// @param current_layer вектор текущий слой 
+/// @param previous_layer вектор предыущий слой
+void characteristic_method(pipe myPipe, double argument, vector<double>& current_layer, vector<double>& previous_layer) {
+    //метод хар-к
+    for (size_t i = 1; i < current_layer.size(); i++)
+        current_layer[i] = previous_layer[i - 1];
+    current_layer[0] = argument;
 }
 
 /// @brief Фун-ия вывода данных расчета в excel формат
@@ -123,7 +121,7 @@ void out_put(pipe myPipe, ring_buffer_t<vector<vector<double>>>& buffer, int i, 
             double Re = myPipe.v * myPipe.get_inner_diameter() / current_layer[1][j];
             double resistance = hydraulic_resistance_isaev(Re, myPipe.get_relative_roughness());
             current_layer[2][j] = p_0;
-            double p_rachet = p_0 + myPipe.get_dx() * (resistance / myPipe.get_inner_diameter() * current_layer[0][j - 1] * pow(myPipe.v, 2) / 2 - M_G * current_layer[0][j - 1] * (myPipe.z_l - myPipe.z_0) / ((myPipe.n - 1) * myPipe.get_dx()));
+            double p_rachet = p_0 + myPipe.get_dx() * (resistance / myPipe.get_inner_diameter() * current_layer[0][j - 1] * pow(myPipe.v, 2) / 2 - M_G * current_layer[0][j - 1] * abs(myPipe.z_l - myPipe.z_0) / ((myPipe.n - 1) * myPipe.get_dx()));
             p_0 = p_rachet;
 
             outFile << i * myPipe.get_dt() << "," << j * myPipe.get_dx() << "," << current_layer[0][j] << "," << current_layer[1][j] << "," << current_layer[2][j] << "\n";
@@ -137,7 +135,7 @@ void out_put(pipe myPipe, ring_buffer_t<vector<vector<double>>>& buffer, int i, 
             double Re = myPipe.v * myPipe.get_inner_diameter() / current_layer[1][j];
             double resistance = hydraulic_resistance_isaev(Re, myPipe.get_relative_roughness());
             current_layer[2][j] = p_0;
-            double p_rachet = p_0 + myPipe.get_dx() * (resistance / myPipe.get_inner_diameter() * current_layer[0][j - 1] * pow(myPipe.v, 2) / 2 - M_G * current_layer[0][j - 1] * (myPipe.z_l - myPipe.z_0) / ((myPipe.n - 1) * myPipe.get_dx()));
+            double p_rachet = p_0 + myPipe.get_dx() * (resistance / myPipe.get_inner_diameter() * current_layer[0][j - 1] * pow(myPipe.v, 2) / 2 - M_G * current_layer[0][j - 1] * abs(myPipe.z_l - myPipe.z_0) / ((myPipe.n - 1) * myPipe.get_dx()));
             p_0 = p_rachet;
 
             outFile << i * myPipe.get_dt() << "," << j * myPipe.get_dx() << "," << current_layer[0][j] << "," << current_layer[1][j] << "," << current_layer[2][j] << "\n";
@@ -145,6 +143,8 @@ void out_put(pipe myPipe, ring_buffer_t<vector<vector<double>>>& buffer, int i, 
         outFile.close();
     }
 }
+
+//вынести 
 
 int main() {
     pipe myPipe;
@@ -155,7 +155,7 @@ int main() {
     myPipe.z_0 = 100;
     myPipe.z_l = 50;
     myPipe.v = 0.5;
-    myPipe.n = 100;
+    myPipe.n = 10;
     myPipe.sher = 15e-6;
 
     massiv ro;
@@ -174,10 +174,12 @@ int main() {
     ring_buffer_t<vector<vector<double>>> buffer(2, { ro_start, nu_start, time_start });
 
     for (size_t h = 0; h < myPipe.n; h++) {
+        for (size_t j = 0; j < buffer.current().size(); j++) {
 
-        characteristic_method(myPipe, ro.massiv[0], buffer.current()[0], buffer.previous()[0]);
-        characteristic_method(myPipe, nu.massiv[0], buffer.current()[1], buffer.previous()[1]);
-        out_put(myPipe, buffer, h, time);
+            characteristic_method(myPipe, ro.massiv[0], buffer.current()[0], buffer.previous()[0]);
+            characteristic_method(myPipe, nu.massiv[0], buffer.current()[1], buffer.previous()[1]);
+            out_put(myPipe, buffer, h, time);
+        }
         buffer.advance(1);
 
     }
