@@ -89,6 +89,20 @@ struct massiv {
     vector<double> massiv;
 };
 
+/// @brief Ввод значений начальных условий
+/// @param myPipe Ссылка на структуру начальных условий
+void iniFun(pipe& myPipe) {
+    myPipe.L = 100000;
+    myPipe.p_0 = 6e6;
+    myPipe.d_vnesh = 720e-3;
+    myPipe.b = 10e-3;
+    myPipe.z_0 = 100;
+    myPipe.z_l = 50;
+    myPipe.v = 2;
+    myPipe.n = 10;
+    myPipe.sher = 15e-6;
+}
+
 /// @brief отдельная функция для метода характеристик
 /// @param iniPipe объявление переменной iniPipe (Данные о параметрах трубопровода)
 /// @param argument  нач.значения
@@ -102,66 +116,66 @@ void characteristic_method(pipe myPipe, double argument, vector<double>& current
 }
 
 
-
-
-
-
-/// @brief Фун-ия вывода данных расчета в excel формат
+/// @brief Фун-ия расчета методом эйлера + отвечает за запись конкретных данных в файл
 /// @param myPipe ссылка на данные о трубопроводе
-/// @param buffer 
-/// @param i 
-/// @param time 
+/// @param buffer буфер данных
+/// @param i счетчик
+/// @param time время моделирования
+void writeToFile(pipe& myPipe, vector<vector<double>>& current_layer, int i, double p_0) {
+    ofstream outFile("block_3.csv", ios::app); // Используем ios::app для добавления данных в конец файла
+
+    for (size_t j = 1; j < current_layer[0].size(); j++) {
+        double Re = myPipe.v * myPipe.get_inner_diameter() / current_layer[1][j];
+        double resistance = hydraulic_resistance_isaev(Re, myPipe.get_relative_roughness());
+        current_layer[2][j] = p_0; // второй для хранения давления на протяжении расчета
+        double p_rachet = p_0 + myPipe.get_dx() * ((-resistance) / myPipe.get_inner_diameter() * current_layer[0][j - 1] * pow(myPipe.v, 2) / 2 - M_G * current_layer[0][j - 1] * (myPipe.z_l - myPipe.z_0) / ((myPipe.n - 1) * myPipe.get_dx()));
+        p_0 = p_rachet;
+
+        outFile << i * myPipe.get_dt() << "," << j * myPipe.get_dx() << "," << current_layer[0][j] << "," << current_layer[1][j] << "," << current_layer[2][j] << "\n";
+    }
+
+    outFile.close();
+}
+
+/// @brief функция для вывода данных расчета в файл в формате Excel
+/// @param myPipe ссылка на данные о трубопроводе
+/// @param buffer буфер данных
+/// @param i счетчик
+/// @param time время моделирования
 void out_put(pipe myPipe, ring_buffer_t<vector<vector<double>>>& buffer, int i, massiv time) {
     vector<vector<double>>& current_layer = buffer.current();
-
-
     double p_0 = myPipe.p_0;
 
     if (i == 0) {
         ofstream outFile("block_3.csv");
         outFile << "Время,Координата,Плотность,Вязкость,Давление" << "\n";
-        // Записать значения текущего слоя в файл
-
-        for (size_t j = 1; j < current_layer[0].size(); j++) {
-            double Re = myPipe.v * myPipe.get_inner_diameter() / current_layer[1][j];
-            double resistance = hydraulic_resistance_isaev(Re, myPipe.get_relative_roughness());
-            current_layer[2][j] = p_0; // второй для хранения давления на протяжении расчета
-            double p_rachet = p_0 + myPipe.get_dx() * (( - resistance) / myPipe.get_inner_diameter() * current_layer[0][j - 1] * pow(myPipe.v, 2) / 2 - M_G * current_layer[0][j - 1] * (myPipe.z_l - myPipe.z_0) / ((myPipe.n - 1) * myPipe.get_dx()));
-            p_0 = p_rachet;
-
-            outFile << i * myPipe.get_dt() << "," << j * myPipe.get_dx() << "," << current_layer[0][j] << "," << current_layer[1][j] << "," << current_layer[2][j] << "\n";
-        }
         outFile.close();
     }
-    else {
-        ofstream outFile("block_3.csv", ios::app);
-        // Записать значения текущего слоя в файл
-        for (size_t j = 1; j < current_layer[0].size(); j++) {
-            double Re = myPipe.v * myPipe.get_inner_diameter() / current_layer[1][j];
-            double resistance = hydraulic_resistance_isaev(Re, myPipe.get_relative_roughness());
-            current_layer[2][j] = p_0; // второй для хранения давления на протяжении расчета
-            double p_rachet = p_0 + myPipe.get_dx() * ((-resistance) / myPipe.get_inner_diameter() * current_layer[0][j - 1] * pow(myPipe.v, 2) / 2 - M_G * current_layer[0][j - 1] * (myPipe.z_l - myPipe.z_0) / ((myPipe.n - 1) * myPipe.get_dx()));
-            p_0 = p_rachet;
 
-            outFile << i * myPipe.get_dt() << "," << j * myPipe.get_dx() << "," << current_layer[0][j] << "," << current_layer[1][j] << "," << current_layer[2][j] << "\n";
+    writeToFile(myPipe, current_layer, i, p_0);
+}
+
+/// @brief расчет методом характеристик
+/// @param myPipe данные о трубопроводе
+/// @param buffer буфер данных
+/// @param ro плотность
+/// @param nu вязкость
+/// @param time время моделирования
+void processPipe(pipe& myPipe, ring_buffer_t<vector<vector<double>>>& buffer, massiv& ro, massiv& nu, massiv& time) {
+    for (size_t h = 0; h < myPipe.n; h++) {
+        for (size_t j = 0; j < buffer.current().size(); j++) {
+            characteristic_method(myPipe, ro.massiv[0], buffer.current()[0], buffer.previous()[0]);
+            characteristic_method(myPipe, nu.massiv[0], buffer.current()[1], buffer.previous()[1]);
+            out_put(myPipe, buffer, h, time);
         }
-        outFile.close();
+        buffer.advance(1);
     }
 }
 
-//вынести 
 
 int main() {
     pipe myPipe;
-    myPipe.L = 100000;
-    myPipe.p_0 = 6e6;
-    myPipe.d_vnesh = 720e-3;
-    myPipe.b = 10e-3;
-    myPipe.z_0 = 100;
-    myPipe.z_l = 50;
-    myPipe.v = 2;
-    myPipe.n = 10;
-    myPipe.sher = 15e-6;
+    iniFun(myPipe);
 
     massiv ro;
     ro.massiv = { 800 };
@@ -174,20 +188,11 @@ int main() {
 
     vector<double> ro_start(myPipe.n, 900);
     vector<double> nu_start(myPipe.n, 15e-6);
-    vector<double> time_start(myPipe.n, 0);
+    vector<double> time_start(myPipe.n, 0); 
 
     ring_buffer_t<vector<vector<double>>> buffer(2, { ro_start, nu_start, time_start });
 
-    for (size_t h = 0; h < myPipe.n; h++) {
-        for (size_t j = 0; j < buffer.current().size(); j++) {
-
-            characteristic_method(myPipe, ro.massiv[0], buffer.current()[0], buffer.previous()[0]);
-            characteristic_method(myPipe, nu.massiv[0], buffer.current()[1], buffer.previous()[1]);
-            out_put(myPipe, buffer, h, time);
-        }
-        buffer.advance(1);
-
-    }
+    processPipe(myPipe, buffer, ro, nu, time);
 }
 
 
