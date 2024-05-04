@@ -101,7 +101,7 @@ struct massiv {
 
 /// @brief Ввод значений начальных условий
 /// @param myPipe Ссылка на структуру начальных условий
-void iniFun(pipe& myPipe) {
+void Pipe_1(pipe& myPipe) {
     myPipe.L = 100000;
     myPipe.p_0 = 6e6;
     myPipe.d_vnesh = 720e-3;
@@ -244,7 +244,7 @@ public:
 
 int main() {
     pipe myPipe;
-    iniFun(myPipe);
+    Pipe_1(myPipe);
 
     massiv ro;
     massiv nu;
