@@ -79,8 +79,7 @@ struct pipe {
     double get_dx() const {
         return L / n;
     }
-
-    
+        
     /// @brief Шаг по времени
     /// @return 
     double get_dt() const {
@@ -96,7 +95,9 @@ struct pipe {
 
 /// @brief Массив данных
 struct massiv {
-    vector<double> massiv;
+    vector<double> ro;
+    vector<double> nu;
+    vector<double> time;
 };
 
 /// @brief Ввод значений начальных условий
@@ -122,17 +123,15 @@ void Pipe_1(pipe& myPipe) {
 /// @param nu_start начальная вязкость в трубе 
 /// @param time_start время моделирования
 void initializeVariables(pipe& myPipe, massiv& ro, massiv& nu, massiv& time, vector<double>& ro_start, vector<double>& nu_start, vector<double>& time_start, vector<double>& ro_pulsing, vector<double>& nu_pulsing, vector<double>& time_pulsing) {
-    // Инициализация переменных для первой партии нефти
-    ro.massiv = { 800 };
-    nu.massiv = { 10e-6 };
-    time.massiv = { 0 };
+    
+    ro.ro = vector<double>(myPipe.n, 800);
+    nu.nu = vector<double>(myPipe.n, 10e-6);
+    time.time = vector<double>(myPipe.n, 0); 
 
-    // Инициализация переменных для второй партии нефти
     ro_start = vector<double>(myPipe.n, 900);
     nu_start = vector<double>(myPipe.n, 15e-6);
     time_start = vector<double>(myPipe.n, 0);
 
-    // Инициализация переменных для импульсной партии нефти
     ro_pulsing = vector<double>(myPipe.n, 990);
     nu_pulsing = vector<double>(myPipe.n, 19e-6);
     time_pulsing = vector<double>(myPipe.n, 0);
@@ -221,6 +220,13 @@ public:
     }
 };
 
+// Добавление функции updateLayerTime
+void updateLayerTime(pipe& myPipe, massiv& timeMassiv) {
+    for (size_t i = 0; i < myPipe.n; ++i) {
+        timeMassiv.time[i] += myPipe.get_dt(); // Обновляем время для каждого слоя
+    }
+}
+
 /// @brief класс расчета методом характеристик
 class PipeProcessor {
 private:
@@ -236,24 +242,24 @@ public:
     /// @param nu вязкость
     /// @param time время моделирования
     void process(pipe& myPipe, ring_buffer_t<vector<vector<double>>>& buffer, massiv& ro, massiv& nu, massiv& time, vector<double>& ro_start, vector<double>& nu_start, vector<double>& time_start, vector<double>& ro_pulsing, vector<double>& nu_pulsing, vector<double>& time_pulsing) {
-        double pulsingStart = 5 * 3600; // Начало импульсной партии в секундах
-        double pulsingEnd = 10 * 3600; // Конец импульсной партии в секундах
+        double pulsingStart = 5 * 3600;
+        double pulsingEnd = 10 * 3600;
         for (size_t h = 0; h < myPipe.n; h++) {
             for (size_t j = 0; j < buffer.current().size(); j++) {
-                // Проверка, находится ли текущее время моделирования в диапазоне от 5 до 10 часов
-                if (time.massiv[0] >= pulsingStart && time.massiv[0] <= pulsingEnd) {
-                    // Использование параметров импульсной партии нефти
+                time.time[h] += myPipe.get_dt();
+                if (time.time[h] >= pulsingStart && time.time[h] <= pulsingEnd) {
                     characteristicMethod.Characteristic(myPipe, ro_pulsing[j], buffer.current()[0], buffer.previous()[0]);
                     characteristicMethod.Characteristic(myPipe, nu_pulsing[j], buffer.current()[1], buffer.previous()[1]);
-                } else {
-                    // Использование параметров основной партии нефти
+                }
+                else {
                     characteristicMethod.Characteristic(myPipe, ro_start[j], buffer.current()[0], buffer.previous()[0]);
                     characteristicMethod.Characteristic(myPipe, nu_start[j], buffer.current()[1], buffer.previous()[1]);
                 }
-                fileWriter.out_put(myPipe, buffer, h, time);
             }
-            buffer.advance(1);
+            updateLayerTime(myPipe, time);
+            fileWriter.out_put(myPipe, buffer, h, time);
         }
+        buffer.advance(1);
     }
 };
 
@@ -277,6 +283,8 @@ int main() {
 
     ring_buffer_t<vector<vector<double>>> buffer(2, { ro_start, nu_start, time_start });
 
-    PipeProcessor pipeProcessor("block_3.csv"); // Передаем имя файла в конструктор
+    PipeProcessor pipeProcessor("block_3.csv");
     pipeProcessor.process(myPipe, buffer, ro, nu, time, ro_start, nu_start, time_start, ro_pulsing, nu_pulsing, time_pulsing);
+
+    return 0;
 }
