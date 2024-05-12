@@ -122,7 +122,7 @@ void Pipe_1(pipe& myPipe) {
 /// @param ro_start начальная плотность в трубе
 /// @param nu_start начальная вязкость в трубе 
 /// @param time_start время моделирования
-void initializeVariables(pipe& myPipe, massiv& ro, massiv& nu, massiv& time, vector<double>& ro_start, vector<double>& nu_start, vector<double>& time_start, vector<double>& ro_pulsing, vector<double>& nu_pulsing, vector<double>& time_pulsing) {
+void initializeVariables(pipe& myPipe, massiv& ro, massiv& nu, massiv& time, vector<double>& ro_start, vector<double>& nu_start, vector<double>& time_start, double& ro_pulsing, vector<double>& nu_pulsing, vector<double>& time_pulsing) {
     
     ro.ro = vector<double>(myPipe.n, 800);
     nu.nu = vector<double>(myPipe.n, 10e-6);
@@ -132,9 +132,9 @@ void initializeVariables(pipe& myPipe, massiv& ro, massiv& nu, massiv& time, vec
     nu_start = vector<double>(myPipe.n, 15e-6);
     time_start = vector<double>(myPipe.n, 0);
 
-    ro_pulsing = vector<double>(myPipe.n, 990);
-    nu_pulsing = vector<double>(myPipe.n, 19e-6);
-    time_pulsing = vector<double>(myPipe.n, 0);
+    ro_pulsing =  990;
+    nu_pulsing = 19e-6;
+    time_pulsing = 0;
 }
 
 /// @brief Класс метода характеристик
@@ -158,7 +158,7 @@ public:
     /// @param myPipe ссылка на данные о трубопроводе
     /// @param current_layer ссылка на текущий слой
     /// @param p_0 начальное давление
-    void Euler(const pipe& myPipe, std::vector<std::vector<double>>& current_layer, int i, double p_0) {
+    void Euler(const pipe& myPipe, std::vector<std::vector<double>>& current_layer, double p_0) {
         // Создаем копию current_layer, чтобы изменять ее содержимое
         std::vector<std::vector<double>> modified_layer = current_layer;
 
@@ -198,34 +198,24 @@ public:
     /// @param myPipe ссылка на данные о трубопроводе
     /// @param buffer буфер о хранении данных о текущем слое
     /// @param time время моделирования
-    void out_put(pipe myPipe, ring_buffer_t<vector<vector<double>>>& buffer, int i, massiv time) {
-        vector<vector<double>>& current_layer = buffer.current();
-        double p_0 = myPipe.p_0;
-
-        // Использование метода Эйлера
-        EulerMethod eulerMethod;
-        eulerMethod.Euler(myPipe, current_layer, i, p_0);
+    void out_put(pipe myPipe, ring_buffer_t<vector<vector<double>>>& buffer, double& time) {
         
-        if (i == 0) {
+        if (time == 0) {
             ofstream outFile("block_3.csv");
             outFile << "Время,Координата,Плотность,Вязкость,Давление" << "\n";
             outFile.close();
         }
         else {
 
+            vector<vector<double>>& current_layer = buffer.current();
+
             for (size_t j = 1; j < current_layer[0].size(); j++) {
-                outFile << i * myPipe.get_dt() << "," << j * myPipe.get_dx() << "," << current_layer[0][j] << "," << current_layer[1][j] << "," << current_layer[2][j] << "\n";
+                outFile << time << "," << j * myPipe.get_dx() << "," << current_layer[0][j] << "," << current_layer[1][j] << "," << current_layer[2][j] << "\n";
             }
         }
     }
 };
 
-// Добавление функции updateLayerTime
-void updateLayerTime(pipe& myPipe, massiv& timeMassiv) {
-    for (size_t i = 0; i < myPipe.n; ++i) {
-        timeMassiv.time[i] += myPipe.get_dt(); // Обновляем время для каждого слоя
-    }
-}
 
 /// @brief класс расчета методом характеристик
 class PipeProcessor {
@@ -241,25 +231,41 @@ public:
     /// @param ro плотность
     /// @param nu вязкость
     /// @param time время моделирования
-    void process(pipe& myPipe, ring_buffer_t<vector<vector<double>>>& buffer, massiv& ro, massiv& nu, massiv& time, vector<double>& ro_start, vector<double>& nu_start, vector<double>& time_start, vector<double>& ro_pulsing, vector<double>& nu_pulsing, vector<double>& time_pulsing) {
+    void process(pipe& myPipe, ring_buffer_t<vector<vector<double>>>& buffer, massiv& ro, massiv& nu, double& ro_start, double& nu_start, double& time_start, double& ro_pulsing, double& nu_pulsing, double& time_pulsing) {
+        
+         
+        double time = 0;
+        double total_time = 12 * 3600; 
         double pulsingStart = 5 * 3600;
         double pulsingEnd = 10 * 3600;
-        for (size_t h = 0; h < myPipe.n; h++) {
-            for (size_t j = 0; j < buffer.current().size(); j++) {
-                time.time[h] += myPipe.get_dt();
-                if (time.time[h] >= pulsingStart && time.time[h] <= pulsingEnd) {
-                    characteristicMethod.Characteristic(myPipe, ro_pulsing[j], buffer.current()[0], buffer.previous()[0]);
-                    characteristicMethod.Characteristic(myPipe, nu_pulsing[j], buffer.current()[1], buffer.previous()[1]);
-                }
-                else {
-                    characteristicMethod.Characteristic(myPipe, ro_start[j], buffer.current()[0], buffer.previous()[0]);
-                    characteristicMethod.Characteristic(myPipe, nu_start[j], buffer.current()[1], buffer.previous()[1]);
-                }
+       
+        while (time < total_time)
+        {
+
+            time += myPipe.get_dt();
+            if (time >= pulsingStart && time <= pulsingEnd) {
+                characteristicMethod.Characteristic(myPipe, ro_pulsing, buffer.current()[0], buffer.previous()[0]);
+                characteristicMethod.Characteristic(myPipe, nu_pulsing, buffer.current()[1], buffer.previous()[1]);
             }
-            updateLayerTime(myPipe, time);
-            fileWriter.out_put(myPipe, buffer, h, time);
+
+            else {
+                characteristicMethod.Characteristic(myPipe, ro_start, buffer.current()[0], buffer.previous()[0]);
+                characteristicMethod.Characteristic(myPipe, nu_start, buffer.current()[1], buffer.previous()[1]);
+            }
+
+            vector<vector<double>>& current_layer = buffer.current();
+            double p_0 = myPipe.p_0;
+           
+            // Использование метода Эйлера
+            EulerMethod eulerMethod;
+            eulerMethod.Euler(myPipe, current_layer, p_0);
+
+            fileWriter.out_put(myPipe, buffer,time);
+
+            buffer.advance(1);
+
         }
-        buffer.advance(1);
+                          
     }
 };
 
