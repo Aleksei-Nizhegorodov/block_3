@@ -95,9 +95,7 @@ struct pipe {
 
 /// @brief Массив данных
 struct massiv {
-    vector<double> ro;
-    vector<double> nu;
-    vector<double> time;
+    vector<double> massiv;
 };
 
 /// @brief Ввод значений начальных условий
@@ -122,19 +120,19 @@ void Pipe_1(pipe& myPipe) {
 /// @param ro_start начальная плотность в трубе
 /// @param nu_start начальная вязкость в трубе 
 /// @param time_start время моделирования
-void initializeVariables(pipe& myPipe, massiv& ro, massiv& nu, massiv& time, vector<double>& ro_start, vector<double>& nu_start, vector<double>& time_start, double& ro_pulsing, vector<double>& nu_pulsing, vector<double>& time_pulsing) {
-    
-    ro.ro = vector<double>(myPipe.n, 800);
-    nu.nu = vector<double>(myPipe.n, 10e-6);
-    time.time = vector<double>(myPipe.n, 0); 
+void initializeVariables(pipe& myPipe, massiv& ro_2, massiv& nu_2, double& ro_pulsing, double& nu_pulsing) {
 
-    ro_start = vector<double>(myPipe.n, 900);
-    nu_start = vector<double>(myPipe.n, 15e-6);
-    time_start = vector<double>(myPipe.n, 0);
 
-    ro_pulsing =  990;
-    nu_pulsing = 19e-6;
-    time_pulsing = 0;
+
+
+    ro_2.massiv = { 800 };
+    nu_2.massiv = { 10e-6 };
+
+
+
+    ro_pulsing = { 990 };
+    nu_pulsing = { 19e-6 };
+
 }
 
 /// @brief Класс метода характеристик
@@ -231,17 +229,15 @@ public:
     /// @param ro плотность
     /// @param nu вязкость
     /// @param time время моделирования
-    void process(pipe& myPipe, ring_buffer_t<vector<vector<double>>>& buffer, massiv& ro, massiv& nu, double& ro_start, double& nu_start, double& time_start, double& ro_pulsing, double& nu_pulsing, double& time_pulsing) {
-        
-         
+    void process(pipe& myPipe, ring_buffer_t<vector<vector<double>>>& buffer, massiv& ro_2, massiv& nu_2, double& ro_pulsing, double& nu_pulsing) {
+
         double time = 0;
-        double total_time = 12 * 3600; 
+        double total_time = 12 * 3600;
         double pulsingStart = 5 * 3600;
         double pulsingEnd = 10 * 3600;
-       
+
         while (time < total_time)
         {
-
             time += myPipe.get_dt();
             if (time >= pulsingStart && time <= pulsingEnd) {
                 characteristicMethod.Characteristic(myPipe, ro_pulsing, buffer.current()[0], buffer.previous()[0]);
@@ -249,23 +245,20 @@ public:
             }
 
             else {
-                characteristicMethod.Characteristic(myPipe, ro_start, buffer.current()[0], buffer.previous()[0]);
-                characteristicMethod.Characteristic(myPipe, nu_start, buffer.current()[1], buffer.previous()[1]);
+                characteristicMethod.Characteristic(myPipe, ro_2.massiv[1], buffer.current()[0], buffer.previous()[0]);
+                characteristicMethod.Characteristic(myPipe, nu_2.massiv[1], buffer.current()[1], buffer.previous()[1]);
             }
 
             vector<vector<double>>& current_layer = buffer.current();
             double p_0 = myPipe.p_0;
-           
-            // Использование метода Эйлера
+
             EulerMethod eulerMethod;
             eulerMethod.Euler(myPipe, current_layer, p_0);
 
-            fileWriter.out_put(myPipe, buffer,time);
+            fileWriter.out_put(myPipe, buffer, time);
 
             buffer.advance(1);
-
         }
-                          
     }
 };
 
@@ -273,24 +266,20 @@ int main() {
     pipe myPipe;
     Pipe_1(myPipe);
 
-    massiv ro;
-    massiv nu;
-    massiv time;
+    massiv ro_2;
+    massiv nu_2;
+   
+   
 
-    vector<double> ro_start;
-    vector<double> nu_start;
-    vector<double> time_start;
+    double ro_pulsing;
+    double nu_pulsing;
 
-    vector<double> ro_pulsing;
-    vector<double> nu_pulsing;
-    vector<double> time_pulsing;
+    initializeVariables(myPipe, ro_2, nu_2, ro_pulsing, nu_pulsing);
 
-    initializeVariables(myPipe, ro, nu, time, ro_start, nu_start, time_start, ro_pulsing, nu_pulsing, time_pulsing);
-
-    ring_buffer_t<vector<vector<double>>> buffer(2, { ro_start, nu_start, time_start });
+    ring_buffer_t<vector<vector<double>>> buffer(2, { {}, {} });
 
     PipeProcessor pipeProcessor("block_3.csv");
-    pipeProcessor.process(myPipe, buffer, ro, nu, time, ro_start, nu_start, time_start, ro_pulsing, nu_pulsing, time_pulsing);
+    pipeProcessor.process(myPipe, buffer, ro_2, nu_2, ro_pulsing, nu_pulsing);
 
     return 0;
 }
