@@ -120,18 +120,14 @@ void Pipe_1(pipe& myPipe) {
 /// @param ro_start начальная плотность в трубе
 /// @param nu_start начальная вязкость в трубе 
 /// @param time_start время моделирования
-void initializeVariables(pipe& myPipe, massiv& ro_2, massiv& nu_2, double& ro_pulsing, double& nu_pulsing) {
+void initializeVariables(pipe& myPipe, double& ro_1, double& nu_1, double& ro_pulsing, double& nu_pulsing) {
 
 
+    ro_1 =   800 ;
+    nu_1  =  10e-6 ;
 
-
-    ro_2.massiv = { 800 };
-    nu_2.massiv = { 10e-6 };
-
-
-
-    ro_pulsing = { 990 };
-    nu_pulsing = { 19e-6 };
+    ro_pulsing =  990 ;
+    nu_pulsing =  19e-6 ;
 
 }
 
@@ -197,19 +193,36 @@ public:
     /// @param buffer буфер о хранении данных о текущем слое
     /// @param time время моделирования
     void out_put(pipe myPipe, ring_buffer_t<vector<vector<double>>>& buffer, double& time) {
+         
+       
         
         if (time == 0) {
-            ofstream outFile("block_3.csv");
+
+            ofstream outFile ("block_3.csv");
+
             outFile << "Время,Координата,Плотность,Вязкость,Давление" << "\n";
-            outFile.close();
-        }
-        else {
 
             vector<vector<double>>& current_layer = buffer.current();
 
             for (size_t j = 1; j < current_layer[0].size(); j++) {
                 outFile << time << "," << j * myPipe.get_dx() << "," << current_layer[0][j] << "," << current_layer[1][j] << "," << current_layer[2][j] << "\n";
             }
+
+            
+        }
+
+        else {
+            ofstream outFile("block_3.csv", ios::app);
+
+
+
+            vector<vector<double>>& current_layer = buffer.current();
+
+            for (size_t j = 1; j < current_layer[0].size(); j++) {
+                outFile << time << "," << j * myPipe.get_dx() << "," << current_layer[0][j] << "," << current_layer[1][j] << "," << current_layer[2][j] << "\n";
+            }
+
+            outFile.close();
         }
     }
 };
@@ -229,26 +242,28 @@ public:
     /// @param ro плотность
     /// @param nu вязкость
     /// @param time время моделирования
-    void process(pipe& myPipe, ring_buffer_t<vector<vector<double>>>& buffer, massiv& ro_2, massiv& nu_2, double& ro_pulsing, double& nu_pulsing) {
+    void process(pipe& myPipe, ring_buffer_t<vector<vector<double>>>& buffer, double& ro_1, double& nu_1, double& ro_pulsing, double& nu_pulsing) {
 
         double time = 0;
-        double total_time = 12 * 3600;
+        double total_time = 16 * 3600;
         double pulsingStart = 5 * 3600;
         double pulsingEnd = 10 * 3600;
 
         while (time < total_time)
         {
-            time += myPipe.get_dt();
+            
             if (time >= pulsingStart && time <= pulsingEnd) {
                 characteristicMethod.Characteristic(myPipe, ro_pulsing, buffer.current()[0], buffer.previous()[0]);
                 characteristicMethod.Characteristic(myPipe, nu_pulsing, buffer.current()[1], buffer.previous()[1]);
             }
 
             else {
-                characteristicMethod.Characteristic(myPipe, ro_2.massiv[1], buffer.current()[0], buffer.previous()[0]);
-                characteristicMethod.Characteristic(myPipe, nu_2.massiv[1], buffer.current()[1], buffer.previous()[1]);
+                characteristicMethod.Characteristic(myPipe, ro_1, buffer.current()[0], buffer.previous()[0]);
+                characteristicMethod.Characteristic(myPipe, nu_1, buffer.current()[1], buffer.previous()[1]);
             }
 
+           
+            
             vector<vector<double>>& current_layer = buffer.current();
             double p_0 = myPipe.p_0;
 
@@ -257,7 +272,11 @@ public:
 
             fileWriter.out_put(myPipe, buffer, time);
 
+            time += myPipe.get_dt();
+            
             buffer.advance(1);
+            
+            
         }
     }
 };
@@ -266,20 +285,22 @@ int main() {
     pipe myPipe;
     Pipe_1(myPipe);
 
-    massiv ro_2;
-    massiv nu_2;
+    double ro_1;
+    double nu_1;
    
-   
-
     double ro_pulsing;
     double nu_pulsing;
 
-    initializeVariables(myPipe, ro_2, nu_2, ro_pulsing, nu_pulsing);
+    initializeVariables(myPipe, ro_1, nu_1, ro_pulsing, nu_pulsing);
 
-    ring_buffer_t<vector<vector<double>>> buffer(2, { {}, {} });
+    vector<double> ro_initial  (myPipe.n, ro_1 );
+    vector<double> nu_initial  ( myPipe.n, nu_1 );
+    vector<double> p_initial  (myPipe.n,0);
+
+    ring_buffer_t<vector<vector<double>>> buffer(2, { ro_initial, nu_initial, p_initial });
 
     PipeProcessor pipeProcessor("block_3.csv");
-    pipeProcessor.process(myPipe, buffer, ro_2, nu_2, ro_pulsing, nu_pulsing);
+    pipeProcessor.process(myPipe, buffer, ro_1, nu_1, ro_pulsing, nu_pulsing);
 
     return 0;
 }
