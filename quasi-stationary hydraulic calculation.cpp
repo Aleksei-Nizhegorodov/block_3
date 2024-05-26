@@ -22,7 +22,7 @@ struct pipe {
     double L;           //длина, [м]
     double d_vnesh;     //внешний диаметр, [мм]
     double b;           //толщина стенки, [мм]
-    double roughness;        //абсюлютная шероховатость, [м]
+    double roughness;   //абсюлютная шероховатость, [м]
     double z_0;         //высотная отметка в начале трубопровода, [м]
     double z_l;         //высотная отметка в конце трубопровода, [м]
     double n;           //кол-во точек расчетной сетки
@@ -79,8 +79,7 @@ struct pipe {
     double get_dx() const {
         return L / n;
     }
-
-    
+        
     /// @brief Шаг по времени
     /// @return 
     double get_dt() const {
@@ -92,11 +91,6 @@ struct pipe {
     double get_n() const {
         return (L / v) / get_dt();
     }
-};
-
-/// @brief Массив данных
-struct massiv {
-    vector<double> massiv;
 };
 
 /// @brief Ввод значений начальных условий
@@ -121,14 +115,15 @@ void Pipe_1(pipe& myPipe) {
 /// @param ro_start начальная плотность в трубе
 /// @param nu_start начальная вязкость в трубе 
 /// @param time_start время моделирования
-void initializeVariables(pipe& myPipe, massiv& ro, massiv& nu, massiv& time, vector<double>& ro_start, vector<double>& nu_start, vector<double>& time_start) {
-    ro.massiv = { 800 };
-    nu.massiv = { 10e-6 };
-    time.massiv = { 0 };
+void initializeVariables(pipe& myPipe, double& ro_1, double& nu_1, double& ro_pulsing, double& nu_pulsing) {
 
-    ro_start = vector<double>(myPipe.n, 900);
-    nu_start = vector<double>(myPipe.n, 15e-6);
-    time_start = vector<double>(myPipe.n, 0);
+
+    ro_1 =   800 ;
+    nu_1  =  10e-6 ;
+
+    ro_pulsing =  990 ;
+    nu_pulsing =  19e-6 ;
+
 }
 
 /// @brief Класс метода характеристик
@@ -152,7 +147,7 @@ public:
     /// @param myPipe ссылка на данные о трубопроводе
     /// @param current_layer ссылка на текущий слой
     /// @param p_0 начальное давление
-    void Euler(const pipe& myPipe, std::vector<std::vector<double>>& current_layer, int i, double p_0) {
+    void Euler(const pipe& myPipe, std::vector<std::vector<double>>& current_layer, double p_0) {
         // Создаем копию current_layer, чтобы изменять ее содержимое
         std::vector<std::vector<double>> modified_layer = current_layer;
 
@@ -192,27 +187,41 @@ public:
     /// @param myPipe ссылка на данные о трубопроводе
     /// @param buffer буфер о хранении данных о текущем слое
     /// @param time время моделирования
-    void out_put(pipe myPipe, ring_buffer_t<vector<vector<double>>>& buffer, int i, massiv time) {
-        vector<vector<double>>& current_layer = buffer.current();
-        double p_0 = myPipe.p_0;
-
-        // Использование метода Эйлера
-        EulerMethod eulerMethod;
-        eulerMethod.Euler(myPipe, current_layer, i, p_0);
+    void out_put(pipe myPipe, ring_buffer_t<vector<vector<double>>>& buffer, double& time) {
+         
+      
         
-        if (i == 0) {
-            ofstream outFile("block_3.csv");
+        if (time == 0) {
+
+            ofstream outFile ("block_3.csv");
+
             outFile << "Время,Координата,Плотность,Вязкость,Давление" << "\n";
-            outFile.close();
-        }
-        else {
+
+            vector<vector<double>>& current_layer = buffer.current();
 
             for (size_t j = 1; j < current_layer[0].size(); j++) {
-                outFile << i * myPipe.get_dt() << "," << j * myPipe.get_dx() << "," << current_layer[0][j] << "," << current_layer[1][j] << "," << current_layer[2][j] << "\n";
+                outFile << time << "," << j * myPipe.get_dx() << "," << current_layer[0][j] << "," << current_layer[1][j] << "," << current_layer[2][j] << "\n";
             }
+
+            
+        }
+
+        else {
+            ofstream outFile("block_3.csv", ios::app);
+
+
+
+            vector<vector<double>>& current_layer = buffer.current();
+
+            for (size_t j = 1; j < current_layer[0].size(); j++) {
+                outFile << time << "," << j * myPipe.get_dx() << "," << current_layer[0][j] << "," << current_layer[1][j] << "," << current_layer[2][j] << "\n";
+            }
+
+            outFile.close();
         }
     }
 };
+
 
 /// @brief класс расчета методом характеристик
 class PipeProcessor {
@@ -228,16 +237,41 @@ public:
     /// @param ro плотность
     /// @param nu вязкость
     /// @param time время моделирования
-    void process(pipe& myPipe, ring_buffer_t<vector<vector<double>>>& buffer, massiv& ro, massiv& nu, massiv& time) {
-        //
-        for (size_t h = 0; h < myPipe.n; h++) {
-            //
-            for (size_t j = 0; j < buffer.current().size(); j++) {
-                characteristicMethod.Characteristic(myPipe, ro.massiv[0], buffer.current()[0], buffer.previous()[0]);
-                characteristicMethod.Characteristic(myPipe, nu.massiv[0], buffer.current()[1], buffer.previous()[1]);
-                fileWriter.out_put(myPipe, buffer, h, time); // Используем fileWriter для вызова out_put
+    void process(pipe& myPipe, ring_buffer_t<vector<vector<double>>>& buffer, double& ro_1, double& nu_1, double& ro_pulsing, double& nu_pulsing) {
+
+        double time = 0;
+        double total_time = 26 * 3600;
+        double pulsingStart = 5 * 3600;
+        double pulsingEnd = 10 * 3600;
+
+        while (time < total_time)
+        {
+            
+            if (time >= pulsingStart && time <= pulsingEnd) {
+                characteristicMethod.Characteristic(myPipe, ro_pulsing, buffer.current()[0], buffer.previous()[0]);
+                characteristicMethod.Characteristic(myPipe, nu_pulsing, buffer.current()[1], buffer.previous()[1]);
             }
+
+            else {
+                characteristicMethod.Characteristic(myPipe, ro_1, buffer.current()[0], buffer.previous()[0]);
+                characteristicMethod.Characteristic(myPipe, nu_1, buffer.current()[1], buffer.previous()[1]);
+            }
+
+           
+            
+            vector<vector<double>>& current_layer = buffer.current();
+            double p_0 = myPipe.p_0;
+
+            EulerMethod eulerMethod;
+            eulerMethod.Euler(myPipe, current_layer, p_0);
+
+            fileWriter.out_put(myPipe, buffer, time);
+
+            time += myPipe.get_dt();
+            
             buffer.advance(1);
+            
+            
         }
     }
 };
@@ -246,24 +280,22 @@ int main() {
     pipe myPipe;
     Pipe_1(myPipe);
 
-    massiv ro;
-    massiv nu;
-    massiv time;
+    double ro_1;
+    double nu_1;
+   
+    double ro_pulsing;
+    double nu_pulsing;
 
-    vector<double> ro_start;
-    vector<double> nu_start;
-    vector<double> time_start;
+    initializeVariables(myPipe, ro_1, nu_1, ro_pulsing, nu_pulsing);
 
-    initializeVariables(myPipe, ro, nu, time, ro_start, nu_start, time_start);
+    vector<double> ro_initial  (myPipe.n, ro_1 );
+    vector<double> nu_initial  ( myPipe.n, nu_1 );
+    vector<double> p_initial  (myPipe.n,0);
 
-    ring_buffer_t<vector<vector<double>>> buffer(2, { ro_start, nu_start, time_start });
+    ring_buffer_t<vector<vector<double>>> buffer(2, { ro_initial, nu_initial, p_initial });
 
-    PipeProcessor pipeProcessor("block_3.csv"); // Передаем имя файла в конструктор
-    pipeProcessor.process(myPipe, buffer, ro, nu, time);
+    PipeProcessor pipeProcessor("block_3.csv");
+    pipeProcessor.process(myPipe, buffer, ro_1, nu_1, ro_pulsing, nu_pulsing);
+
+    return 0;
 }
-
-
-
-
-
-
