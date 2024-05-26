@@ -194,7 +194,7 @@ public:
     /// @param time время моделирования
     void out_put(pipe myPipe, ring_buffer_t<vector<vector<double>>>& buffer, double& time) {
          
-       
+      
         
         if (time == 0) {
 
@@ -245,7 +245,7 @@ public:
     void process(pipe& myPipe, ring_buffer_t<vector<vector<double>>>& buffer, double& ro_1, double& nu_1, double& ro_pulsing, double& nu_pulsing) {
 
         double time = 0;
-        double total_time = 16 * 3600;
+        double total_time = 26 * 3600;
         double pulsingStart = 5 * 3600;
         double pulsingEnd = 10 * 3600;
 
