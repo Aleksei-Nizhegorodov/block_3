@@ -93,11 +93,6 @@ struct pipe {
     }
 };
 
-/// @brief Массив данных
-struct massiv {
-    vector<double> massiv;
-};
-
 /// @brief Ввод значений начальных условий
 /// @param myPipe Ссылка на структуру начальных условий
 void Pipe_1(pipe& myPipe) {
